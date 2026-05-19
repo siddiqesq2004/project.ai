@@ -151,7 +151,8 @@ if ($phase == 1) {
 
 $aiResponse = callClaude($prompt, $apiKey, $email, "Phase Data Simulation (Phase $phase)");
 if ($aiResponse['error']) {
-    echo json_encode(["error" => "AI Engine Connection Error: " . $aiResponse['error']]);
+    $err = $aiResponse['error'];
+    echo json_encode(["error" => (strpos($err, 'System Maintenance:') !== false) ? $err : ("AI Engine Connection Error: " . $err)]);
     exit;
 }
 $response = $aiResponse['content'];

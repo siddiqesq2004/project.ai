@@ -101,6 +101,13 @@ function callClaude($system, $user, $apiKey, $email, $logAction, $maxRetries = 3
     return ["content" => "", "stop_reason" => "", "error" => $lastError];
 }
 
+function handleClaudeError($err, $context) {
+    if (strpos($err, 'System Maintenance:') !== false) {
+        return $err;
+    }
+    return $context . ": " . $err;
+}
+
 function repairTruncatedJSON($json) {
     $json = trim($json);
     if (empty($json)) return null;
@@ -195,28 +202,28 @@ function extractJSON($content) {
 $metaSys = "You are an academic project architect. Return ONLY raw JSON: {\"keywords\": [], \"chapters\": []}. No explanation.";
 $metaUsr = "Generate 6-8 keywords and a list of 7-8 technical chapters for a project: $title ($domain). Requirements: $requirements. IMPORTANT: The first chapter MUST be 'Introduction'.";
 $metaResult = callClaude($metaSys, $metaUsr, $apiKey, $email, "Generate Outline: Chapters");
-if ($metaResult['error']) { echo json_encode(["error" => "AI Error (Meta): " . $metaResult['error']]); exit; }
+if ($metaResult['error']) { echo json_encode(["error" => handleClaudeError($metaResult['error'], "AI Error (Meta)")]); exit; }
 $metaData = extractJSON($metaResult['content']);
 
 // 2. Get Abstract
 $absSys = "You are an academic project architect. Return ONLY raw JSON: {\"abstract\": \"<p>...</p>\"}. No explanation.";
 $absUsr = "Generate a technical abstract (200 words) for: $title ($domain).";
 $abstractResult = callClaude($absSys, $absUsr, $apiKey, $email, "Generate Outline: Abstract");
-if ($abstractResult['error']) { echo json_encode(["error" => "AI Error (Abstract): " . $abstractResult['error']]); exit; }
+if ($abstractResult['error']) { echo json_encode(["error" => handleClaudeError($abstractResult['error'], "AI Error (Abstract)")]); exit; }
 $abstractData = extractJSON($abstractResult['content']);
 
 // 3. Get PPT
 $pptSys = "You are an academic project architect. Return ONLY raw JSON: {\"ppt\": [{\"type\": \"title\", \"title\": \"...\", \"subtitle\": \"...\", \"points\": []}]}. No explanation.";
 $pptUsr = "Generate exactly 8 detailed slides for: $title ($domain).";
 $pptResult = callClaude($pptSys, $pptUsr, $apiKey, $email, "Generate Outline: PPT Slides");
-if ($pptResult['error']) { echo json_encode(["error" => "AI Error (PPT): " . $pptResult['error']]); exit; }
+if ($pptResult['error']) { echo json_encode(["error" => handleClaudeError($pptResult['error'], "AI Error (PPT)")]); exit; }
 $pptData = extractJSON($pptResult['content']);
 
 // 4. Get Code
 $codeSys = "You are an academic project architect. Return ONLY raw JSON with very brief boilerplate: {\"code\": {\"files\": [{\"filename\": \"...\", \"content\": \"...\"}]}}. Keep files extremely short (max 40 lines each), no comments, and absolutely no explanations.";
 $codeUsr = "Generate 1-2 brief boilerplate files of core code for: $title ($domain). Keep it highly summarized so it fits easily within token limits.";
 $codeResult = callClaude($codeSys, $codeUsr, $apiKey, $email, "Generate Outline: Boilerplate Code");
-if ($codeResult['error']) { echo json_encode(["error" => "AI Error (Code): " . $codeResult['error']]); exit; }
+if ($codeResult['error']) { echo json_encode(["error" => handleClaudeError($codeResult['error'], "AI Error (Code)")]); exit; }
 $codeData = extractJSON($codeResult['content']);
 
 if (!$metaData || !$abstractData || !$pptData || !$codeData) {
