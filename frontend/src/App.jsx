@@ -106,7 +106,7 @@ function App() {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [activePreviewImage, setActivePreviewImage] = useState(null);
 
-  const [usageStats, setUsageStats] = useState({ total_input_tokens: 0, total_output_tokens: 0, total_cost_usd: 0.0, logs: [], students: [], student_limits: {} });
+  const [usageStats, setUsageStats] = useState({ total_input_tokens: 0, total_output_tokens: 0, total_cost_usd: 0.0, anthropic_funded_credits: 50.00, anthropic_remaining_credits: 50.00, logs: [], students: [], student_limits: {} });
 
   // Load Projects on login
   useEffect(() => {
@@ -135,6 +135,8 @@ function App() {
             total_input_tokens: statsRes.data.total_input_tokens,
             total_output_tokens: statsRes.data.total_output_tokens,
             total_cost_usd: statsRes.data.total_cost_usd,
+            anthropic_funded_credits: statsRes.data.anthropic_funded_credits,
+            anthropic_remaining_credits: statsRes.data.anthropic_remaining_credits,
             student_limits: statsRes.data.student_limits || {},
             logs: statsRes.data.logs || [],
             students: statsRes.data.students || []
@@ -1061,7 +1063,7 @@ function App() {
             </div>
 
             {/* Claude API Credit & Billing Monitor Alert */}
-            <div className="glass-card billing-alert-card" style={{ marginTop: '1.5rem', background: 'rgba(15, 23, 42, 0.45)', borderLeft: `6px solid ${usageStats.total_cost_usd < 10.0 ? '#10b981' : usageStats.total_cost_usd < 25.0 ? '#f59e0b' : '#ef4444'}`, borderTop: '1px solid rgba(255,255,255,0.08)', borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', overflow: 'hidden' }}>
+            <div className="glass-card billing-alert-card" style={{ marginTop: '1.5rem', background: 'rgba(15, 23, 42, 0.45)', borderLeft: `6px solid ${(usageStats.anthropic_remaining_credits || 0) > 15.0 ? '#10b981' : (usageStats.anthropic_remaining_credits || 0) > 5.0 ? '#f59e0b' : '#ef4444'}`, borderTop: '1px solid rgba(255,255,255,0.08)', borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', overflow: 'hidden' }}>
               <div className="billing-content-layout" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem', padding: '1.5rem' }}>
                 <div style={{ flex: '1', minWidth: '280px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
@@ -1069,22 +1071,23 @@ function App() {
                     <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#fff' }}>Claude 3.5 Sonnet Engine Billing Monitor</h4>
                   </div>
                   <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: 'rgba(255,255,255,0.7)', lineHeight: '1.5' }}>
-                    Cumulative Token Spent: <strong style={{ color: '#fff' }}>${parseFloat(usageStats.total_cost_usd || 0).toFixed(4)} USD</strong>. 
+                    Estimated Remaining Credits: <strong style={{ color: '#00f2fe', fontSize: '1.05rem' }}>${parseFloat(usageStats.anthropic_remaining_credits !== undefined ? usageStats.anthropic_remaining_credits : 50.00).toFixed(2)} USD</strong> (out of ${parseFloat(usageStats.anthropic_funded_credits !== undefined ? usageStats.anthropic_funded_credits : 50.00).toFixed(2)} logged).<br/>
+                    Cumulative Spent: <strong style={{ color: '#fff' }}>${parseFloat(usageStats.total_cost_usd || 0).toFixed(4)} USD</strong>. 
                     Tokens Consumed: <span style={{ color: '#a5f3fc' }}>{((usageStats.total_input_tokens || 0) / 1000).toFixed(1)}k Input / {((usageStats.total_output_tokens || 0) / 1000).toFixed(1)}k Output</span>.
                   </p>
                   
                   {/* Glowing Status Message */}
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600, background: usageStats.total_cost_usd < 10.0 ? 'rgba(16,185,129,0.15)' : usageStats.total_cost_usd < 25.0 ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)', color: usageStats.total_cost_usd < 10.0 ? '#10b981' : usageStats.total_cost_usd < 25.0 ? '#f59e0b' : '#ef4444', border: `1px solid ${usageStats.total_cost_usd < 10.0 ? 'rgba(16,185,129,0.3)' : usageStats.total_cost_usd < 25.0 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: usageStats.total_cost_usd < 10.0 ? '#10b981' : usageStats.total_cost_usd < 25.0 ? '#f59e0b' : '#ef4444', display: 'inline-block', boxShadow: `0 0 8px ${usageStats.total_cost_usd < 10.0 ? '#10b981' : usageStats.total_cost_usd < 25.0 ? '#f59e0b' : '#ef4444'}` }}></span>
-                    {usageStats.total_cost_usd < 10.0 
-                      ? "🟢 API Credits Wallet: HEALTHY (Prepaid balance is sufficient)" 
-                      : usageStats.total_cost_usd < 25.0 
-                        ? "⚠️ API Credits Wallet: RECHARGE RECOMMENDED (Budget usage growing, consider reloading soon)" 
-                        : "🚨 API Credits Wallet: RECHARGE NOW! (Cumulative spent is high. recharge in console to prevent system downtime!)"}
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600, background: (usageStats.anthropic_remaining_credits || 0) > 15.0 ? 'rgba(16,185,129,0.15)' : (usageStats.anthropic_remaining_credits || 0) > 5.0 ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)', color: (usageStats.anthropic_remaining_credits || 0) > 15.0 ? '#10b981' : (usageStats.anthropic_remaining_credits || 0) > 5.0 ? '#f59e0b' : '#ef4444', border: `1px solid ${(usageStats.anthropic_remaining_credits || 0) > 15.0 ? 'rgba(16,185,129,0.3)' : (usageStats.anthropic_remaining_credits || 0) > 5.0 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: (usageStats.anthropic_remaining_credits || 0) > 15.0 ? '#10b981' : (usageStats.anthropic_remaining_credits || 0) > 5.0 ? '#f59e0b' : '#ef4444', display: 'inline-block', boxShadow: `0 0 8px ${(usageStats.anthropic_remaining_credits || 0) > 15.0 ? '#10b981' : (usageStats.anthropic_remaining_credits || 0) > 5.0 ? '#f59e0b' : '#ef4444'}` }}></span>
+                    {(usageStats.anthropic_remaining_credits || 0) > 15.0 
+                      ? `🟢 Prepaid Credits Balance: HEALTHY ($${parseFloat(usageStats.anthropic_remaining_credits || 0).toFixed(2)} remaining)` 
+                      : (usageStats.anthropic_remaining_credits || 0) > 5.0 
+                        ? `⚠️ Prepaid Credits Balance: LOW BALANCE ($${parseFloat(usageStats.anthropic_remaining_credits || 0).toFixed(2)} remaining. recharge recommended)` 
+                        : `🚨 Prepaid Credits Balance: DANGER ZONE ($${parseFloat(usageStats.anthropic_remaining_credits || 0).toFixed(2)} remaining. recharge now!)`}
                   </div>
                 </div>
 
-                <div className="billing-action-btn" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-end' }}>
+                <div className="billing-action-btn" style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', alignItems: 'flex-end' }}>
                   <a 
                     href="https://console.anthropic.com/settings/billing" 
                     target="_blank" 
@@ -1094,6 +1097,31 @@ function App() {
                   >
                     <CreditCard size={18} /> Recharge Claude Credits
                   </a>
+                  <button 
+                    onClick={async () => {
+                      const amount = prompt("Enter the dollar amount ($ USD) you funded/topped-up on the Anthropic Console (e.g., 20.00 or 50.00):");
+                      if (amount && !isNaN(amount)) {
+                        try {
+                          const res = await axios.post(`${API_BASE}/extend_credits.php`, {
+                            admin_email: user.email,
+                            student_email: 'anthropic_billing',
+                            amount: parseFloat(amount)
+                          });
+                          if (res.data.success) {
+                            toast.success(res.data.message);
+                            loadProjects();
+                          } else {
+                            toast.error(res.data.error || "Failed to update balance.");
+                          }
+                        } catch (err) {
+                          toast.error("Connection error: " + err.message);
+                        }
+                      }
+                    }}
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.9rem', borderRadius: '6px', fontWeight: 600, color: '#fff', fontSize: '0.8rem', cursor: 'pointer', transition: 'all 0.2s' }}
+                  >
+                    <Plus size={14} /> Log Manual Top-up
+                  </button>
                   <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>Secured via official Anthropic Billing Console</span>
                 </div>
               </div>

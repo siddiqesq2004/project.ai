@@ -28,8 +28,12 @@ if (empty($studentEmail)) {
 
 $success = JsonDB::extendCredits($studentEmail, $amount);
 if ($success) {
-    echo json_encode(["success" => true, "message" => "Successfully allocated +$" . number_format($amount, 2) . " credit limit to " . $studentEmail]);
+    if (strcasecmp($studentEmail, 'anthropic_billing') === 0) {
+        echo json_encode(["success" => true, "message" => "Successfully added +$" . number_format($amount, 2) . " to global Anthropic billing credit pool."]);
+    } else {
+        echo json_encode(["success" => true, "message" => "Successfully allocated +$" . number_format($amount, 2) . " credit limit to " . $studentEmail]);
+    }
 } else {
-    echo json_encode(["error" => "Failed to update credits. Student email not found in database."]);
+    echo json_encode(["error" => "Failed to update credits. Target not found in database."]);
 }
 ?>

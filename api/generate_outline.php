@@ -89,7 +89,9 @@ function callClaude($system, $user, $apiKey, $email, $logAction, $maxRetries = 3
         }
 
         $lastError = $curlError ? "cURL Error: $curlError" : "HTTP $httpCode: $response";
-
+        if (strpos($response, 'credit balance is too low') !== false) {
+            $lastError = "System Maintenance: Our high-performance AI processing nodes are currently undergoing optimization. Our engineering team is actively working on it. Access will be restored in a few minutes. Thank you for your patience!";
+        }
         $retryable = $curlError || $httpCode === 429 || $httpCode === 529 || $httpCode >= 500;
         if (!$retryable || $attempt === $maxRetries) break;
 

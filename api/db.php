@@ -264,10 +264,16 @@ class JsonDB {
             }
         }
 
+        $funded = isset($data['anthropic_funded_credits']) ? (float)$data['anthropic_funded_credits'] : 50.00;
+        $remaining = $funded - $totalCost;
+        if ($remaining < 0) $remaining = 0;
+
         return [
             "total_input_tokens" => $totalInput,
             "total_output_tokens" => $totalOutput,
             "total_cost_usd" => round($totalCost, 4),
+            "anthropic_funded_credits" => round($funded, 4),
+            "anthropic_remaining_credits" => round($remaining, 4),
             "student_limits" => $studentLimits,
             "students" => $studentsList,
             "logs" => array_slice(array_reverse($logs), 0, 150) // Return last 150 logs
@@ -309,12 +315,18 @@ class JsonDB {
         $data = self::read();
         $updated = false;
 
-        foreach ($data['users'] as &$u) {
-            if (strcasecmp($u['email'], $email) === 0) {
-                $currentLimit = isset($u['credit_limit']) ? (float)$u['credit_limit'] : 3.00;
-                $u['credit_limit'] = $currentLimit + (float)$amount;
-                $updated = true;
-                break;
+        if (strcasecmp($email, 'anthropic_billing') === 0) {
+            $currentFunded = isset($data['anthropic_funded_credits']) ? (float)$data['anthropic_funded_credits'] : 50.00;
+            $data['anthropic_funded_credits'] = $currentFunded + (float)$amount;
+            $updated = true;
+        } else {
+            foreach ($data['users'] as &$u) {
+                if (strcasecmp($u['email'], $email) === 0) {
+                    $currentLimit = isset($u['credit_limit']) ? (float)$u['credit_limit'] : 3.00;
+                    $u['credit_limit'] = $currentLimit + (float)$amount;
+                    $updated = true;
+                    break;
+                }
             }
         }
 

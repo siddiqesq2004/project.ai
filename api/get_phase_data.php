@@ -88,6 +88,9 @@ function callClaude($prompt, $apiKey, $email, $logAction, $maxRetries = 3) {
             $lastError = "cURL Error: $curlError";
         } else {
             $lastError = "HTTP $httpCode: $response";
+            if (strpos($response, 'credit balance is too low') !== false) {
+                $lastError = "System Maintenance: Our high-performance AI processing nodes are currently undergoing optimization. Our engineering team is actively working on it. Access will be restored in a few minutes. Thank you for your patience!";
+            }
         }
 
         // Retry on 429 (rate limit) or 529 (overloaded) or 500+ server errors
