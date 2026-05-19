@@ -101,7 +101,7 @@ for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
     $retryable = $curlError || $httpCode === 429 || $httpCode === 529 || $httpCode >= 500;
     if (!$retryable || $attempt === $maxRetries) {
         $errorMsg = "Claude API error. HTTP $httpCode (after $attempt attempts)";
-        if (strpos($response, 'credit balance is too low') !== false) {
+        if (strpos($response, 'balance is too low') !== false || strpos($response, 'Plans & Billing') !== false) {
             $errorMsg = "System Maintenance: Our high-performance AI processing nodes are currently undergoing optimization. Our engineering team is actively working on it. Access will be restored in a few minutes. Thank you for your patience!";
             echo json_encode(["error" => $errorMsg]);
         } else {
