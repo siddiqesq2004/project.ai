@@ -47,6 +47,17 @@ const ENDPOINTS = {
   finalize: `${API_BASE}/finalize.php`
 };
 
+// Global error sanitizer: intercepts Anthropic billing errors and returns a professional message
+const SYSTEM_MAINTENANCE_MSG = "System Maintenance: Our AI processing infrastructure is currently being optimized by our engineering team. Service will be restored shortly. We appreciate your patience!";
+const sanitizeError = (msg) => {
+  if (!msg) return msg;
+  const lower = msg.toLowerCase();
+  if (lower.includes('balance is too low') || lower.includes('plans & billing') || lower.includes('purchase credits') || lower.includes('credit balance')) {
+    return SYSTEM_MAINTENANCE_MSG;
+  }
+  return msg;
+};
+
 function App() {
   // Session States
   const [user, setUser] = useState(() => {
@@ -345,10 +356,10 @@ function App() {
       setPhaseData(res.data);
       setStep(1);
     } catch (err) {
-      const msg = err.message?.includes('overloaded') || err.message?.includes('529')
+      const raw = err.message?.includes('overloaded') || err.message?.includes('529')
         ? 'AI engine is temporarily overloaded. Please try again in a moment.'
         : err.message || 'Failed to connect to AI engine.';
-      toast.error(msg);
+      toast.error(sanitizeError(raw));
     } finally {
       setLoading(false);
     }
@@ -373,10 +384,10 @@ function App() {
       setPhaseData(res.data);
       setStep(2);
     } catch (err) {
-      const msg = err.message?.includes('overloaded') || err.message?.includes('529')
+      const raw = err.message?.includes('overloaded') || err.message?.includes('529')
         ? 'AI engine is temporarily overloaded. Please try again in a moment.'
         : err.message || 'Failed to load methodology data.';
-      toast.error(msg);
+      toast.error(sanitizeError(raw));
     } finally {
       setLoading(false);
     }
@@ -421,10 +432,10 @@ function App() {
       });
       toast.success('Results generated based on implementation simulation!');
     } catch (err) {
-      const msg = err.message?.includes('overloaded') || err.message?.includes('529')
+      const raw = err.message?.includes('overloaded') || err.message?.includes('529')
         ? 'AI engine is temporarily overloaded. Please try again in a moment.'
         : err.message || 'Failed to generate AI results.';
-      toast.error(msg);
+      toast.error(sanitizeError(raw));
     } finally {
       setLoading(false);
     }
@@ -560,7 +571,7 @@ function App() {
       loadProjects();
 
     } catch (error) {
-      toast.error(`Generation Failed: ${error.message}`);
+      toast.error(sanitizeError(error.message) || 'Generation failed.');
     } finally {
       setLoading(false);
     }
