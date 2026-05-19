@@ -1,0 +1,25 @@
+# Dependencies
+**/node_modules/
+**/dist/
+
+# API upload directories & temporary outputs
+api/uploads/*
+!api/uploads/.gitkeep
+*.zip
+*.pptx
+
+# Local/IDE configs
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Scratch / temporary scripts
+scratch/
+scratch.php
+scratch_stream.php
+test_finalize.php
+
+# Secrets / Configs
+api/config.php
+
