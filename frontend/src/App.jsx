@@ -454,9 +454,9 @@ function App() {
     if (formData.reportTemplate) data.append('reportTemplate', formData.reportTemplate);
     if (formData.pptTemplate) data.append('pptTemplate', formData.pptTemplate);
 
-    formData.resultImages.forEach((img, i) => {
-      if (img.file) data.append(`figure_${i+1}`, img.file);
-    });
+    // Note: We do NOT send actual image files to generate_outline.php
+    // That endpoint only needs text data. The figure descriptions are
+    // already included in fullRequirements via figuresContext.
 
     try {
       const outlineRes = await axios.post(ENDPOINTS.generateOutline, data);
