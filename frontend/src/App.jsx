@@ -1079,7 +1079,7 @@ function App() {
                 <div style={{ flex: '1', minWidth: '280px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
                     <Cpu size={22} className="sparkle-pulse" style={{ color: '#00f2fe' }} />
-                    <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#fff' }}>Claude 3.5 Sonnet Engine Billing Monitor</h4>
+                    <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#fff' }}>Claude Opus 4.8 Engine Billing Monitor</h4>
                   </div>
                   <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: 'rgba(255,255,255,0.7)', lineHeight: '1.5' }}>
                     Estimated Remaining Credits: <strong style={{ color: '#00f2fe', fontSize: '1.05rem' }}>${parseFloat(usageStats.anthropic_remaining_credits !== undefined ? usageStats.anthropic_remaining_credits : 50.00).toFixed(2)} USD</strong> (out of ${parseFloat(usageStats.anthropic_funded_credits !== undefined ? usageStats.anthropic_funded_credits : 50.00).toFixed(2)} logged).<br/>
@@ -1338,7 +1338,7 @@ function App() {
             <div className="project-list-controls" style={{ marginTop: '3rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Activity size={20} color="#00f2fe" />
-                <h3 style={{ margin: 0 }}>Claude 3.5 Sonnet Live Activity Trail</h3>
+                <h3 style={{ margin: 0 }}>Claude Opus 4.8 Live Activity Trail</h3>
               </div>
               <p style={{ margin: 0, fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)' }}>Real-time token logs and cost audit trails</p>
             </div>

@@ -163,9 +163,9 @@ class JsonDB {
     public static function logUsage($email, $action, $inputTokens, $outputTokens) {
         $data = self::read();
         
-        // Claude 3.5 Sonnet pricing: $3.00/M input, $15.00/M output
-        $inputCost = ($inputTokens / 1000000) * 3.00;
-        $outputCost = ($outputTokens / 1000000) * 15.00;
+        // Claude Opus pricing: $15.00/M input, $75.00/M output
+        $inputCost = ($inputTokens / 1000000) * 15.00;
+        $outputCost = ($outputTokens / 1000000) * 75.00;
         $totalCost = $inputCost + $outputCost;
 
         $newLog = [
