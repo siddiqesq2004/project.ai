@@ -37,12 +37,14 @@ if ($action === 'signup') {
 
     $newUser = JsonDB::createUser($name, $email, $password);
     if ($newUser) {
+        $token = JsonDB::createSessionToken($newUser['email']);
         echo json_encode([
             "success" => true,
             "user" => [
                 "role" => "student",
                 "name" => $newUser['name'],
-                "email" => $newUser['email']
+                "email" => $newUser['email'],
+                "token" => $token
             ]
         ]);
     } else {

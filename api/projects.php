@@ -1,21 +1,25 @@
 <?php
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
 header("Content-Type: application/json");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/middleware.php';
+
+$session = authenticateRequest(false);
+$authenticatedEmail = $session ? $session['email'] : null;
 
 $inputJSON = file_get_contents('php://input');
 $input = json_decode($inputJSON, true);
 
 $action = $input['action'] ?? $_GET['action'] ?? '';
-$email = trim($input['email'] ?? $_GET['email'] ?? '');
+$email = trim($input['email'] ?? $_GET['email'] ?? $authenticatedEmail ?? '');
 
 if (empty($email)) {
-    echo json_encode(["error" => "Authorization error. User email is required."]);
+    echo json_encode(["error" => "Authorization error. User email or session token is required."]);
     exit;
 }
 

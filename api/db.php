@@ -1,84 +1,108 @@
 <?php
-// Simple, zero-configuration file-based JSON database for Hostinger deployment.
-// Stores all users and projects inside the writable uploads folder.
+// Relational Database Engine Wrapper
+// Fully backward-compatible with legacy JsonDB calls while powered by robust PDO SQLite/SQL.
+
+require_once __DIR__ . '/db_pdo.php';
 
 class JsonDB {
-    private static $dbPath = __DIR__ . '/uploads/database.json';
-
-    private static function init() {
-        if (!file_exists(__DIR__ . '/uploads')) {
-            mkdir(__DIR__ . '/uploads', 0777, true);
-        }
-        if (!file_exists(self::$dbPath)) {
-            $initialData = [
-                "users" => [],
-                "projects" => []
-            ];
-            file_put_contents(self::$dbPath, json_encode($initialData, JSON_PRETTY_PRINT));
-        }
-    }
-
-    private static function read() {
-        self::init();
-        $content = file_get_contents(self::$dbPath);
-        $data = json_decode($content, true);
-        if (!$data) {
-            return ["users" => [], "projects" => []];
-        }
-        return $data;
-    }
-
-    private static function write($data) {
-        self::init();
-        file_put_contents(self::$dbPath, json_encode($data, JSON_PRETTY_PRINT));
+    private static function getPdo(): PDO {
+        return Database::getConnection();
     }
 
     // --- User Actions ---
     public static function findUserByEmail($email) {
-        $data = self::read();
-        foreach ($data['users'] as $user) {
-            if (strcasecmp($user['email'], $email) === 0) {
-                return $user;
-            }
-        }
-        return null;
+        $pdo = self::getPdo();
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(:email) LIMIT 1");
+        $stmt->execute([':email' => $email]);
+        $user = $stmt->fetch();
+        return $user ?: null;
     }
 
     public static function createUser($name, $email, $password) {
-        $data = self::read();
-        
-        // Check if user already exists
         if (self::findUserByEmail($email)) {
             return false;
         }
 
-        $newUser = [
-            "id" => uniqid(),
+        $id = uniqid();
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        $now = date('Y-m-d H:i:s');
+
+        $pdo = self::getPdo();
+        $stmt = $pdo->prepare("
+            INSERT INTO users (id, name, email, password, credit_limit, created_at)
+            VALUES (:id, :name, :email, :password, 3.00, :created_at)
+        ");
+        $stmt->execute([
+            ':id' => $id,
+            ':name' => $name,
+            ':email' => $email,
+            ':password' => $hash,
+            ':created_at' => $now
+        ]);
+
+        return [
+            "id" => $id,
             "name" => $name,
             "email" => $email,
-            "password" => password_hash($password, PASSWORD_DEFAULT),
-            "created_at" => date('Y-m-d H:i:s')
+            "credit_limit" => 3.00,
+            "created_at" => $now
         ];
-
-        $data['users'][] = $newUser;
-        self::write($data);
-        return $newUser;
     }
 
     public static function verifyUser($email, $password) {
-        // Handle Hardcoded Admin Account
+        // Hardcoded Master Admin
         if (strcasecmp($email, 'ranjith.mecs@gmail.com') === 0 && $password === 'mecs@gmail.com') {
+            $token = self::createSessionToken('ranjith.mecs@gmail.com');
             return [
                 "role" => "admin",
                 "name" => "Ranjith Admin",
-                "email" => "ranjith.mecs@gmail.com"
+                "email" => "ranjith.mecs@gmail.com",
+                "token" => $token
             ];
         }
 
         $user = self::findUserByEmail($email);
         if ($user && password_verify($password, $user['password'])) {
+            $token = self::createSessionToken($user['email']);
             return [
                 "role" => "student",
+                "name" => $user['name'],
+                "email" => $user['email'],
+                "token" => $token
+            ];
+        }
+        return null;
+    }
+
+    // --- Session Token Security ---
+    public static function createSessionToken($email): string {
+        $pdo = self::getPdo();
+        $token = bin2hex(random_bytes(32));
+        $expiry = date('Y-m-d H:i:s', strtotime('+30 days'));
+
+        $stmt = $pdo->prepare("UPDATE users SET auth_token = :token, token_expiry = :expiry WHERE LOWER(email) = LOWER(:email)");
+        $stmt->execute([
+            ':token' => $token,
+            ':expiry' => $expiry,
+            ':email' => $email
+        ]);
+
+        return $token;
+    }
+
+    public static function verifySessionToken(string $token) {
+        if (empty($token)) return null;
+
+        $pdo = self::getPdo();
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE auth_token = :token AND token_expiry > :now LIMIT 1");
+        $stmt->execute([
+            ':token' => $token,
+            ':now' => date('Y-m-d H:i:s')
+        ]);
+        $user = $stmt->fetch();
+        if ($user) {
+            return [
+                "role" => strcasecmp($user['email'], 'ranjith.mecs@gmail.com') === 0 ? "admin" : "student",
                 "name" => $user['name'],
                 "email" => $user['email']
             ];
@@ -88,185 +112,186 @@ class JsonDB {
 
     // --- Project Actions ---
     public static function getProjectsByUser($email) {
-        $data = self::read();
-        $userProjects = [];
-        foreach ($data['projects'] as $proj) {
-            if (strcasecmp($proj['email'], $email) === 0) {
-                $userProjects[] = $proj;
-            }
+        $pdo = self::getPdo();
+        $stmt = $pdo->prepare("SELECT * FROM projects WHERE LOWER(email) = LOWER(:email) ORDER BY created_at DESC");
+        $stmt->execute([':email' => $email]);
+        $rows = $stmt->fetchAll();
+
+        foreach ($rows as &$r) {
+            $r['payload'] = json_decode($r['payload'], true);
         }
-        // Return reverse sorted by creation time
-        usort($userProjects, function($a, $b) {
-            return strcmp($b['created_at'], $a['created_at']);
-        });
-        return $userProjects;
+        return $rows;
     }
 
     public static function getAllProjects() {
-        $data = self::read();
-        $all = $data['projects'];
-        usort($all, function($a, $b) {
-            return strcmp($b['created_at'], $a['created_at']);
-        });
-        return $all;
+        $pdo = self::getPdo();
+        $stmt = $pdo->query("SELECT * FROM projects ORDER BY created_at DESC");
+        $rows = $stmt->fetchAll();
+
+        foreach ($rows as &$r) {
+            $r['payload'] = json_decode($r['payload'], true);
+        }
+        return $rows;
     }
 
     public static function saveProject($email, $title, $domain, $payload) {
-        $data = self::read();
-        
-        // Check if project with same title already exists for this user to update it
-        $foundIndex = -1;
-        foreach ($data['projects'] as $idx => $proj) {
-            if (strcasecmp($proj['email'], $email) === 0 && strcasecmp($proj['title'], $title) === 0) {
-                $foundIndex = $idx;
-                break;
-            }
+        $pdo = self::getPdo();
+        $payloadStr = is_string($payload) ? $payload : json_encode($payload);
+        $now = date('Y-m-d H:i:s');
+
+        // Check if project already exists for this title and email
+        $check = $pdo->prepare("SELECT id, created_at FROM projects WHERE LOWER(email) = LOWER(:email) AND LOWER(title) = LOWER(:title) LIMIT 1");
+        $check->execute([':email' => $email, ':title' => $title]);
+        $existing = $check->fetch();
+
+        if ($existing) {
+            $id = $existing['id'];
+            $createdAt = $existing['created_at'];
+            $update = $pdo->prepare("
+                UPDATE projects 
+                SET domain = :domain, payload = :payload, updated_at = :updated_at 
+                WHERE id = :id
+            ");
+            $update->execute([
+                ':domain' => $domain,
+                ':payload' => $payloadStr,
+                ':updated_at' => $now,
+                ':id' => $id
+            ]);
+        } else {
+            $id = uniqid();
+            $createdAt = $now;
+            $insert = $pdo->prepare("
+                INSERT INTO projects (id, email, title, domain, payload, created_at, updated_at)
+                VALUES (:id, :email, :title, :domain, :payload, :created_at, :updated_at)
+            ");
+            $insert->execute([
+                ':id' => $id,
+                ':email' => $email,
+                ':title' => $title,
+                ':domain' => $domain,
+                ':payload' => $payloadStr,
+                ':created_at' => $now,
+                ':updated_at' => $now
+            ]);
         }
 
-        $projectObj = [
-            "id" => ($foundIndex !== -1) ? $data['projects'][$foundIndex]['id'] : uniqid(),
+        return [
+            "id" => $id,
             "email" => $email,
             "title" => $title,
             "domain" => $domain,
-            "payload" => $payload, // Full generator state json
-            "created_at" => ($foundIndex !== -1) ? $data['projects'][$foundIndex]['created_at'] : date('Y-m-d H:i:s'),
-            "updated_at" => date('Y-m-d H:i:s')
+            "payload" => is_string($payload) ? json_decode($payload, true) : $payload,
+            "created_at" => $createdAt,
+            "updated_at" => $now
         ];
-
-        if ($foundIndex !== -1) {
-            $data['projects'][$foundIndex] = $projectObj;
-        } else {
-            $data['projects'][] = $projectObj;
-        }
-
-        self::write($data);
-        return $projectObj;
     }
 
     public static function deleteProject($id, $email) {
-        $data = self::read();
-        $filtered = [];
-        $deleted = false;
-        foreach ($data['projects'] as $proj) {
-            if ($proj['id'] === $id && strcasecmp($proj['email'], $email) === 0) {
-                $deleted = true;
-                continue;
-            }
-            $filtered[] = $proj;
-        }
-        $data['projects'] = $filtered;
-        self::write($data);
-        return $deleted;
+        $pdo = self::getPdo();
+        $stmt = $pdo->prepare("DELETE FROM projects WHERE id = :id AND LOWER(email) = LOWER(:email)");
+        $stmt->execute([':id' => $id, ':email' => $email]);
+        return $stmt->rowCount() > 0;
     }
 
     // --- Claude API Token Usage Logs ---
     public static function logUsage($email, $action, $inputTokens, $outputTokens) {
-        $data = self::read();
-        
+        $pdo = self::getPdo();
+
         // Claude Opus pricing: $15.00/M input, $75.00/M output
         $inputCost = ($inputTokens / 1000000) * 15.00;
         $outputCost = ($outputTokens / 1000000) * 75.00;
         $totalCost = $inputCost + $outputCost;
+        $now = date('Y-m-d H:i:s');
+        $id = uniqid();
 
-        $newLog = [
-            "id" => uniqid(),
+        $stmt = $pdo->prepare("
+            INSERT INTO usage_logs (id, email, action, input_tokens, output_tokens, cost, created_at)
+            VALUES (:id, :email, :action, :input_tokens, :output_tokens, :cost, :created_at)
+        ");
+        $stmt->execute([
+            ':id' => $id,
+            ':email' => $email ?: 'Anonymous Student',
+            ':action' => $action,
+            ':input_tokens' => (int)$inputTokens,
+            ':output_tokens' => (int)$outputTokens,
+            ':cost' => round($totalCost, 6),
+            ':created_at' => $now
+        ]);
+
+        return [
+            "id" => $id,
             "email" => $email ?: 'Anonymous Student',
             "action" => $action,
             "input_tokens" => (int)$inputTokens,
             "output_tokens" => (int)$outputTokens,
             "cost" => round($totalCost, 6),
-            "created_at" => date('Y-m-d H:i:s')
+            "created_at" => $now
         ];
-
-        if (!isset($data['usage_logs'])) {
-            $data['usage_logs'] = [];
-        }
-        $data['usage_logs'][] = $newLog;
-        self::write($data);
-        return $newLog;
     }
 
     public static function getUsageStats() {
-        $data = self::read();
-        $logs = isset($data['usage_logs']) ? $data['usage_logs'] : [];
-        
-        $totalInput = 0;
-        $totalOutput = 0;
-        $totalCost = 0.0;
-        
-        foreach ($logs as $log) {
-            $totalInput += $log['input_tokens'];
-            $totalOutput += $log['output_tokens'];
-            $totalCost += $log['cost'];
-        }
-        
-        // Compute active limit specs per student and collect registered student profiles
+        $pdo = self::getPdo();
+
+        // 1. Total tokens and spent
+        $totals = $pdo->query("SELECT SUM(input_tokens) as total_in, SUM(output_tokens) as total_out, SUM(cost) as total_spent FROM usage_logs")->fetch();
+        $totalInput = (int)($totals['total_in'] ?? 0);
+        $totalOutput = (int)($totals['total_out'] ?? 0);
+        $totalCost = (float)($totals['total_spent'] ?? 0.0);
+
+        // 2. Settings for funded credits
+        $settingStmt = $pdo->query("SELECT value FROM settings WHERE key = 'anthropic_funded_credits'");
+        $settingRow = $settingStmt->fetch();
+        $funded = $settingRow ? (float)$settingRow['value'] : 50.00;
+        $remaining = max(0, $funded - $totalCost);
+
+        // 3. User limits and student list
+        $userRows = $pdo->query("SELECT * FROM users ORDER BY created_at DESC")->fetchAll();
         $studentLimits = [];
         $studentsList = [];
-        if (isset($data['users'])) {
-            foreach ($data['users'] as $u) {
-                $email = $u['email'];
-                $limit = isset($u['credit_limit']) ? (float)$u['credit_limit'] : 3.00;
-                $studentLimits[strtolower($email)] = $limit;
 
-                // Determine active projects and active phase
-                $userProjects = [];
-                if (isset($data['projects'])) {
-                    foreach ($data['projects'] as $proj) {
-                        if (strcasecmp($proj['email'], $email) === 0) {
-                            $userProjects[] = $proj;
-                        }
-                    }
-                }
+        foreach ($userRows as $u) {
+            $email = $u['email'];
+            $limit = (float)($u['credit_limit'] ?? 3.00);
+            $studentLimits[strtolower($email)] = $limit;
 
-                $latestProject = null;
-                $activePhase = 'Not Started';
-                if (count($userProjects) > 0) {
-                    usort($userProjects, function($a, $b) {
-                        return strcmp($b['updated_at'] ?? $b['created_at'], $a['updated_at'] ?? $a['created_at']);
-                    });
-                    $latestProject = $userProjects[0];
-                    
-                    // Determine phase based on currentStep saved in payload
-                    $savedStep = $latestProject['payload']['currentStep'] ?? null;
-                    if ($savedStep === 0) {
-                        $activePhase = 'Phase 1: Setup';
-                    } elseif ($savedStep === 1) {
-                        $activePhase = 'Phase 1: Formulations';
-                    } elseif ($savedStep === 2) {
-                        $activePhase = 'Phase 2: Methodology';
-                    } elseif ($savedStep === 3) {
-                        $activePhase = 'Phase 3: Results';
-                    } elseif ($savedStep === 4) {
-                        $activePhase = 'Phase 4: Completed';
-                    } else {
-                        $activePhase = 'Phase 1: Setup';
-                    }
-                }
+            // Spend for this student
+            $spendStmt = $pdo->prepare("SELECT SUM(cost) as user_spend FROM usage_logs WHERE LOWER(email) = LOWER(:email)");
+            $spendStmt->execute([':email' => $email]);
+            $userSpend = (float)($spendStmt->fetch()['user_spend'] ?? 0.0);
 
-                // Calculate cumulative spend for this user
-                $userSpend = 0.0;
-                foreach ($logs as $log) {
-                    if (strcasecmp($log['email'], $email) === 0) {
-                        $userSpend += (float)$log['cost'];
-                    }
-                }
+            // Latest project for this student
+            $projStmt = $pdo->prepare("SELECT title, payload FROM projects WHERE LOWER(email) = LOWER(:email) ORDER BY updated_at DESC LIMIT 1");
+            $projStmt->execute([':email' => $email]);
+            $latestProj = $projStmt->fetch();
 
-                $studentsList[] = [
-                    "name" => $u['name'],
-                    "email" => $u['email'],
-                    "created_at" => $u['created_at'],
-                    "credit_limit" => $limit,
-                    "active_phase" => $activePhase,
-                    "latest_project_title" => $latestProject ? $latestProject['title'] : 'No project started yet',
-                    "total_spend" => round($userSpend, 4)
-                ];
+            $activePhase = 'Not Started';
+            $projectTitle = 'No project started yet';
+
+            if ($latestProj) {
+                $projectTitle = $latestProj['title'];
+                $payload = json_decode($latestProj['payload'], true);
+                $savedStep = $payload['currentStep'] ?? null;
+                if ($savedStep === 0 || $savedStep === 1) $activePhase = 'Phase 1: Formulations';
+                elseif ($savedStep === 2) $activePhase = 'Phase 2: Methodology';
+                elseif ($savedStep === 3) $activePhase = 'Phase 3: Results';
+                elseif ($savedStep === 4) $activePhase = 'Phase 4: Completed';
+                else $activePhase = 'Phase 1: Setup';
             }
+
+            $studentsList[] = [
+                "name" => $u['name'],
+                "email" => $u['email'],
+                "created_at" => $u['created_at'],
+                "credit_limit" => $limit,
+                "active_phase" => $activePhase,
+                "latest_project_title" => $projectTitle,
+                "total_spend" => round($userSpend, 4)
+            ];
         }
 
-        $funded = isset($data['anthropic_funded_credits']) ? (float)$data['anthropic_funded_credits'] : 50.00;
-        $remaining = $funded - $totalCost;
-        if ($remaining < 0) $remaining = 0;
+        // 4. Recent logs
+        $logs = $pdo->query("SELECT * FROM usage_logs ORDER BY created_at DESC LIMIT 150")->fetchAll();
 
         return [
             "total_input_tokens" => $totalInput,
@@ -276,64 +301,42 @@ class JsonDB {
             "anthropic_remaining_credits" => round($remaining, 4),
             "student_limits" => $studentLimits,
             "students" => $studentsList,
-            "logs" => array_slice(array_reverse($logs), 0, 150) // Return last 150 logs
+            "logs" => $logs
         ];
     }
 
     // --- Student Credit Cap Controls ---
     public static function hasCredits($email) {
-        // MECS Admin has infinite credits
         if (strcasecmp($email, 'ranjith.mecs@gmail.com') === 0) {
             return true;
         }
 
-        $data = self::read();
-        $logs = isset($data['usage_logs']) ? $data['usage_logs'] : [];
-        
-        $spent = 0.0;
-        foreach ($logs as $log) {
-            if (strcasecmp($log['email'], $email) === 0) {
-                $spent += (float)$log['cost'];
-            }
-        }
+        $pdo = self::getPdo();
+        $user = self::findUserByEmail($email);
+        $limit = $user ? (float)($user['credit_limit'] ?? 3.00) : 3.00;
 
-        // Default limit is $3.00
-        $limit = 3.00;
-        foreach ($data['users'] as $u) {
-            if (strcasecmp($u['email'], $email) === 0) {
-                if (isset($u['credit_limit'])) {
-                    $limit = (float)$u['credit_limit'];
-                }
-                break;
-            }
-        }
+        $stmt = $pdo->prepare("SELECT SUM(cost) as spent FROM usage_logs WHERE LOWER(email) = LOWER(:email)");
+        $stmt->execute([':email' => $email]);
+        $spent = (float)($stmt->fetch()['spent'] ?? 0.0);
 
         return $spent < $limit;
     }
 
     public static function extendCredits($email, $amount) {
-        $data = self::read();
-        $updated = false;
+        $pdo = self::getPdo();
 
         if (strcasecmp($email, 'anthropic_billing') === 0) {
-            $currentFunded = isset($data['anthropic_funded_credits']) ? (float)$data['anthropic_funded_credits'] : 50.00;
-            $data['anthropic_funded_credits'] = $currentFunded + (float)$amount;
-            $updated = true;
-        } else {
-            foreach ($data['users'] as &$u) {
-                if (strcasecmp($u['email'], $email) === 0) {
-                    $currentLimit = isset($u['credit_limit']) ? (float)$u['credit_limit'] : 3.00;
-                    $u['credit_limit'] = $currentLimit + (float)$amount;
-                    $updated = true;
-                    break;
-                }
-            }
+            $settingStmt = $pdo->query("SELECT value FROM settings WHERE key = 'anthropic_funded_credits'");
+            $currentFunded = (float)($settingStmt->fetch()['value'] ?? 50.00);
+            $newFunded = $currentFunded + (float)$amount;
+
+            $update = $pdo->prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('anthropic_funded_credits', :val)");
+            return $update->execute([':val' => (string)$newFunded]);
         }
 
-        if ($updated) {
-            self::write($data);
-        }
-        return $updated;
+        $stmt = $pdo->prepare("UPDATE users SET credit_limit = credit_limit + :amount WHERE LOWER(email) = LOWER(:email)");
+        $stmt->execute([':amount' => (float)$amount, ':email' => $email]);
+        return $stmt->rowCount() > 0;
     }
 }
 ?>

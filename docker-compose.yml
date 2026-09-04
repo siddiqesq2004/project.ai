@@ -1,0 +1,12 @@
+# project-ai (PHP + Apache) — isolated compose project with persistent database volume.
+services:
+  project_frontend:
+    build:
+      context: /opt/project-ai/app
+      dockerfile: Dockerfile
+    container_name: project_frontend
+    restart: always
+    ports:
+      - "8081:80"
+    volumes:
+      - /opt/project-ai/app/api/uploads:/var/www/html/api/uploads
